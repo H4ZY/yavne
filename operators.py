@@ -29,6 +29,51 @@ from . import types
 from . import utils
 
 
+def uniform_color_shader():
+    """Return a uniform color shader compatible with various Blender versions."""
+    try:
+        return gpu.shader.from_builtin('3D_UNIFORM_COLOR')
+    except (AttributeError, ValueError):
+        return gpu.shader.from_builtin('UNIFORM_COLOR')
+
+
+def hide_object(obj, hide=True):
+    """Hide or reveal an object regardless of Blender version."""
+    if hasattr(obj, "hide_viewport"):
+        obj.hide_viewport = hide
+    else:
+        obj.hide_set(hide)
+
+
+def calc_normals_split(mesh):
+    """Calculate split normals if the API provides the function."""
+    calc = getattr(mesh, "calc_normals_split", None)
+    if callable(calc):
+        calc()
+    else:
+        calc = getattr(mesh, "calc_normals", None)
+        if callable(calc):
+            calc()
+        else:
+            if getattr(mesh, "is_editmode", False):
+                bm = bmesh.from_edit_mesh(mesh)
+                bm.normal_update()
+                bmesh.update_edit_mesh(mesh)
+            else:
+                bm = bmesh.new()
+                bm.from_mesh(mesh)
+                bm.normal_update()
+                bm.to_mesh(mesh)
+                bm.free()
+
+
+def free_normals_split(mesh):
+    """Free split normal data when supported by the API."""
+    free = getattr(mesh, "free_normals_split", None)
+    if callable(free):
+        free()
+
+
 class MESH_OT_YAVNEBase(bpy.types.Operator):
     bl_idname = 'mesh.yavne_base'
     bl_label = 'YAVNE Base Operator'
@@ -135,7 +180,7 @@ class MESH_OT_ManageVertexNormalWeight(MESH_OT_YAVNEBase):
 
             #  Set unweighted vertex normal component values.
             if self.type == 'UNWEIGHTED':
-                mesh.calc_normals_split()
+                calc_normals_split(mesh)
                 for v in selected_verts:
                     for loop in v.link_loops:
                         vn_local = mesh.loops[loop.index].normal
@@ -143,7 +188,7 @@ class MESH_OT_ManageVertexNormalWeight(MESH_OT_YAVNEBase):
                         loop[loop_normal_x_layer] = vn_loop.x
                         loop[loop_normal_y_layer] = vn_loop.y
                         loop[loop_normal_z_layer] = vn_loop.z
-                mesh.free_normals_split()
+                free_normals_split(mesh)
 
         # Update the mesh.
         bmesh.update_edit_mesh(mesh)
@@ -234,7 +279,7 @@ class MESH_OT_PickShadingSource(MESH_OT_YAVNEBase):
             for obj in scene.objects
             if (obj.type == 'MESH' and
                 obj is not edit_object and
-                not obj.hide_viewport
+                obj.visible_get()
             )
         ]
 
@@ -247,7 +292,7 @@ class MESH_OT_PickShadingSource(MESH_OT_YAVNEBase):
             )
         ]
         for obj in self.temporarily_hidden_objects:
-            obj.hide_viewport = True
+            hide_object(obj, True)
 
         # Display the operator's instructions in the active area's header.
         context.area.header_text_set('LMB: Pick, Escape: Cancel')
@@ -291,7 +336,7 @@ class MESH_OT_PickShadingSource(MESH_OT_YAVNEBase):
     def finish(self, context):
         # Reveal  temporarily hidden objects.
         for obj in self.temporarily_hidden_objects:
-            obj.hide_viewport = False
+            hide_object(obj, False)
 
         # Return to Edit mode, if necessary.
         if self.initially_in_edit_mode:
@@ -367,7 +412,7 @@ class MESH_OT_GetNormalVector(MESH_OT_YAVNEBase):
         edit_object.update_from_editmode()
         model_matrix = edit_object.matrix_world
         mesh = edit_object.data
-        mesh.calc_normals_split()
+        calc_normals_split(mesh)
         bm = bmesh.from_edit_mesh(mesh)
         overlay = context.space_data.overlay
 
@@ -464,7 +509,7 @@ class MESH_OT_GetNormalVector(MESH_OT_YAVNEBase):
                 end = start + mathutils.Vector(vn_global) * normals_length
                 coords.append(start.to_tuple())
                 coords.append(end.to_tuple())
-        shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
+        shader = uniform_color_shader()
         shader.bind()
         shader.uniform_float('color', default_color)
         batch = gpu_extras.batch.batch_for_shader(
@@ -474,7 +519,7 @@ class MESH_OT_GetNormalVector(MESH_OT_YAVNEBase):
         # Highlight selected normal.
         end = start + mathutils.Vector(self.normals[self.selected_idx]) * normals_length
         coords = [start.to_tuple(), end.to_tuple()]
-        shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
+        shader = uniform_color_shader()
         shader.bind()
         shader.uniform_float('color', highlight_color)
         batch = gpu_extras.batch.batch_for_shader(
@@ -585,7 +630,7 @@ class MESH_OT_MergeVertexNormals(MESH_OT_YAVNEBase):
             cells[x][y][z].append(v)
 
         # Merge vertex normals in the vicinity of each selected vertex.
-        mesh.calc_normals_split()
+        calc_normals_split(mesh)
         while selected_verts:
             v_curr = selected_verts.pop()
             v_curr_co = v_curr.co
@@ -672,7 +717,6 @@ class MESH_OT_TransferShading(MESH_OT_YAVNEBase):
     def execute(self, context):
         edit_object = context.edit_object
         mesh = edit_object.data
-        mesh.use_auto_smooth = True
         modifiers = edit_object.modifiers
         source = self.addon.preferences.source
 
@@ -839,12 +883,11 @@ class MESH_OT_UpdateVertexNormals(MESH_OT_YAVNEBase):
         bm = bmesh.new()
         bm.from_mesh(mesh)
 
-        # Enable mesh/overlay flags.
-        mesh.use_auto_smooth = True
+        # Enable overlay flags.
         overlay.show_edge_sharp = True
 
         # Prepare the mesh to be processed.
-        mesh.calc_normals_split()
+        calc_normals_split(mesh)
         bm.verts.ensure_lookup_table()
         split_normals = multiprocessing.sharedctypes.Array(
             types.Vec3, len(mesh.loops), lock = False)
@@ -878,7 +921,7 @@ class MESH_OT_UpdateVertexNormals(MESH_OT_YAVNEBase):
         bpy.ops.object.mode_set(mode = 'EDIT')
 
         # Cleanup.
-        mesh.free_normals_split()
+        free_normals_split(mesh)
         bm.free()
 
         return {'FINISHED'}
