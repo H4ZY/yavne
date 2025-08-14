@@ -22,7 +22,7 @@ bl_info = {
     'description' : 'Yet another vertex normal editor',
     'location' : '3D View > Tool Shelf > Shading/UVs',
     'author' : 'Stoker',
-    'version' : (2, 0, 8),
+    'version' : (2, 0, 4),
     'blender' : (4, 3, 2),
     'category' : 'Mesh'
 }

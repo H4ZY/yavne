@@ -2,14 +2,18 @@
 
 This Blender addon provides a set of tools for editing vertex normals. As seen in the following image, Y.A.V.N.E. can dramatically improve the visual quality of a mesh without altering geometry.
 
+
+
+### Note about the original repository
+After 4 years of absence from the original creator [fedackb](https://github.com/fedackb), I decided to fix the bugs that prevented it from running on the latest versions of Blender.
+I only intend to fix occasional bugs and keep the repository up to date, and for now I have no plans to completely add or modify the plugin’s functions.
+
 ![yavne](https://cloud.githubusercontent.com/assets/8960984/13205008/723b6f74-d89a-11e5-8e46-2e85e79caf6f.png)
 
 ### **Download** ###
 
-Select one of the following links depending on the version of Blender that you are using:
-
-* [Blender 2.80+](https://github.com/fedackb/yavne/archive/master.zip)
-* [Blender 2.79](https://github.com/fedackb/yavne/archive/2.79.zip)
+From version 2.0.4 of the plugin, it was split into a discontinued version that only supported Blender 2.8 and earlier. So, older versions can be found at this link, and the current version can be obtained from the release section.
+*  [Release Page](https://github.com/H4ZY/yavne/releases)
 
 ### **User Interface** ###
 
@@ -81,6 +85,11 @@ It is necessary to recalculate vertex normals after making changes to geometry. 
 **Flat Face Shading** preserves shading discontinuities caused by flat faces.
 
 ### **Version History** ###
+
+2.0.4
+
+ * Update for the latest versions, from Blender 4.0 and above
+ * Renamed the plugin tab from "Extended Tools" to "Y.A.V.N.E"
 
 2.0.3
 
